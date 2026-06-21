@@ -2,7 +2,6 @@
   "success": false,
   "url": "https://dizipal1556.com/movies/squatch",
   "link": null,
-  "quality": null,
-  "timestamp": "2026-06-21T14:11:56.227Z",
-  "error": "LINK_BULUNAMADI"
+  "timestamp": "2026-06-21T14:12:37.362Z",
+  "error": "patronDizipal.getStreams is not a function"
 }
