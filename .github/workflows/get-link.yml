@@ -1,0 +1,47 @@
+name: Get M3U8/MP4 Link
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  get-link:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      
+      - name: Install crypto-js
+        run: npm install crypto-js
+      
+      - name: Run
+        run: |
+          node -e "
+          const patronDizipal = require('./patronDizipal.js');
+          
+          (async () => {
+              // ŞU DEĞERLERİ DEĞİŞTİR
+              const tmdbId = '550';      // Film ID
+              const type = 'movie';       // 'movie' veya 'tv'
+              const season = 1;           // Dizi ise sezon
+              const episode = 1;          // Dizi ise bölüm
+              
+              let streams;
+              if (type === 'movie') {
+                  streams = await patronDizipal.getStreams(tmdbId, type);
+              } else {
+                  streams = await patronDizipal.getStreams(tmdbId, type, season, episode);
+              }
+              
+              if (streams && streams.length > 0) {
+                  console.log('LINK:', streams[0].url);
+                  console.log('KALİTE:', streams[0].quality);
+              } else {
+                  console.log('LINK BULUNAMADI');
+              }
+          })();
+          "
