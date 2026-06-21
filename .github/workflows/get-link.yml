@@ -1,4 +1,4 @@
-name: Get M3U8/MP4 Link
+name: Get Stream Link
 
 on:
   push:
@@ -8,58 +8,84 @@ jobs:
   get-link:
     runs-on: ubuntu-latest
     
-    # NODE.JS UYARI ÇÖZÜMÜ - Node.js 24 kullanmaya zorla
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '18'
       
-      - name: Install crypto-js
-        run: npm install crypto-js
+      - run: npm install crypto-js
       
-      - name: Get Stream Link
+      - name: Get and Save Link as JSON
         run: |
           node -e "
           const patronDizipal = require('./patronDizipal.js');
+          const fs = require('fs');
           
           (async () => {
               // ★★★ BU DEĞERLERİ DEĞİŞTİR ★★★
-              const tmdbId = '550';      // Film ID (Fight Club)
+              const tmdbId = '550';      // Film ID
               const type = 'movie';       // 'movie' veya 'tv'
               const season = 1;           // Dizi ise sezon
               const episode = 1;          // Dizi ise bölüm
               // ★★★ DEĞİŞTİRME BURADA BİTTİ ★★★
               
               let streams;
-              if (type === 'movie') {
-                  streams = await patronDizipal.getStreams(tmdbId, type);
-              } else {
-                  streams = await patronDizipal.getStreams(tmdbId, type, season, episode);
+              let link = null;
+              let quality = null;
+              let error = null;
+              
+              try {
+                  if (type === 'movie') {
+                      streams = await patronDizipal.getStreams(tmdbId, type);
+                  } else {
+                      streams = await patronDizipal.getStreams(tmdbId, type, season, episode);
+                  }
+                  
+                  if (streams && streams.length > 0) {
+                      link = streams[0].url;
+                      quality = streams[0].quality || 'Auto';
+                  } else {
+                      error = 'LINK_BULUNAMADI';
+                  }
+              } catch (e) {
+                  error = e.message;
               }
               
-              if (streams && streams.length > 0) {
-                  console.log('✅ LINK BULUNDU:');
-                  console.log('📺 URL:', streams[0].url);
-                  console.log('📊 Kalite:', streams[0].quality);
-                  
-                  // Link türünü göster
-                  if (streams[0].url.includes('.m3u8')) {
-                      console.log('📁 Bu bir M3U8 playlist linki');
-                  } else if (streams[0].url.includes('.mp4')) {
-                      console.log('🎬 Bu bir MP4 video linki');
-                  } else if (streams[0].url.includes('iframe') || streams[0].url.includes('player')) {
-                      console.log('🖥️ Bu bir iframe linki, tarayıcıda açman lazım');
-                  }
-              } else {
-                  console.log('❌ LINK BULUNAMADI');
-                  console.log('TMDB ID\'yi veya film/dizi adını kontrol et');
-              }
+              const result = {
+                  success: link !== null,
+                  tmdbId: tmdbId,
+                  type: type,
+                  season: season,
+                  episode: episode,
+                  link: link,
+                  quality: quality,
+                  timestamp: new Date().toISOString(),
+                  error: error
+              };
+              
+              fs.writeFileSync('link.json', JSON.stringify(result, null, 2));
+              console.log('✅ link.json oluşturuldu');
+              console.log('📺 Link:', link);
           })();
           "
+      
+      - name: Commit JSON File
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "actions@github.com"
+          git add link.json
+          git commit -m "Link güncellendi [skip ci]" || echo "Değişiklik yok"
+          git push
+      
+      - name: Show Link
+        run: |
+          echo "=========================================="
+          echo "📺 LİNK.JSON İÇERİĞİ:"
+          echo "=========================================="
+          cat link.json
+          echo "=========================================="
