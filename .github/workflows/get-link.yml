@@ -4,7 +4,6 @@ on:
   push:
   workflow_dispatch:
 
-# ★★★ BUNU EKLE ★★★
 permissions:
   contents: write
 
@@ -16,73 +15,85 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
       
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
       
-      - run: npm install crypto-js
+      - name: Install crypto-js
+        run: npm install crypto-js
       
-      - name: Get and Save Link as JSON
+      - name: Get Stream Link
         run: |
           node -e "
           const patronDizipal = require('./patronDizipal.js');
           const fs = require('fs');
           
           (async () => {
-              const tmdbId = '550';
-              const type = 'movie';
-              const season = 1;
-              const episode = 1;
+              // ★★★ BURAYA FİLM SAYFASI URL'İNİ YAZ ★★★
+              const directUrl = 'https://dizipal1556.com/movies/squatch';
               
-              let streams;
-              let link = null;
-              let quality = null;
-              let error = null;
+              console.log('📌 URL:', directUrl);
               
               try {
-                  if (type === 'movie') {
-                      streams = await patronDizipal.getStreams(tmdbId, type);
-                  } else {
-                      streams = await patronDizipal.getStreams(tmdbId, type, season, episode);
-                  }
+                  const streams = await patronDizipal.getStreams(
+                      'squatch',
+                      'movie',
+                      null,
+                      null,
+                      directUrl
+                  );
+                  
+                  let link = null;
+                  let quality = null;
+                  let error = null;
                   
                   if (streams && streams.length > 0) {
                       link = streams[0].url;
                       quality = streams[0].quality || 'Auto';
+                      console.log('✅ LINK:', link);
                   } else {
                       error = 'LINK_BULUNAMADI';
+                      console.log('❌ Link bulunamadı');
                   }
+                  
+                  const result = {
+                      success: link !== null,
+                      url: directUrl,
+                      link: link,
+                      quality: quality,
+                      timestamp: new Date().toISOString(),
+                      error: error
+                  };
+                  
+                  fs.writeFileSync('link.json', JSON.stringify(result, null, 2));
+                  console.log('✅ link.json oluşturuldu');
+                  
               } catch (e) {
-                  error = e.message;
+                  console.error('❌ HATA:', e.message);
+                  const result = {
+                      success: false,
+                      url: directUrl,
+                      link: null,
+                      timestamp: new Date().toISOString(),
+                      error: e.message
+                  };
+                  fs.writeFileSync('link.json', JSON.stringify(result, null, 2));
               }
-              
-              const result = {
-                  success: link !== null,
-                  tmdbId: tmdbId,
-                  type: type,
-                  season: season,
-                  episode: episode,
-                  link: link,
-                  quality: quality,
-                  timestamp: new Date().toISOString(),
-                  error: error
-              };
-              
-              fs.writeFileSync('link.json', JSON.stringify(result, null, 2));
-              console.log('✅ link.json oluşturuldu');
-              console.log('📺 Link:', link);
           })();
           "
+      
+      - name: Show Result
+        run: cat link.json
       
       - name: Commit JSON File
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "actions@github.com"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
           git add link.json
           git commit -m "Link güncellendi [skip ci]" || echo "Değişiklik yok"
           git push
-      
-      - name: Show Link
-        run: cat link.json
