@@ -1,7 +1,5 @@
 /**
- * patronDizipal - Built from src/patronDizipal/
- * Generated: 2026-06-18T22:41:25.378Z
- * DÜZELTİLDİ: Direk URL desteği eklendi
+ * patronDizipal - DÜZELTİLDİ - Direk URL ve API desteği eklendi
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -268,122 +266,113 @@ function resolveDizipal(url, activeUrl) {
     try {
       const siteUrl = activeUrl || MAIN_URL;
       console.log(`${PROVIDER_TAG2} Çözümleniyor: ${url}`);
+      
       const response = yield fetchWithResponse(url, {
         headers: { "Referer": siteUrl }
       });
       const html = yield response.text();
+      
+      // ★★★ VİDEO ID'Yİ BUL ★★★
+      let videoId = null;
+      
+      // 1. data-id atribütü
+      const idMatch1 = html.match(/data-id=["']([^"']+)["']/i);
+      if (idMatch1) videoId = idMatch1[1];
+      
+      // 2. video_id değişkeni
+      if (!videoId) {
+        const idMatch2 = html.match(/video_id["']?\s*[:=]\s*["']([^"']+)["']/i);
+        if (idMatch2) videoId = idMatch2[1];
+      }
+      
+      // 3. URL'deki ID
+      if (!videoId) {
+        const idMatch3 = html.match(/\/video\/([^\/?"']+)/i);
+        if (idMatch3) videoId = idMatch3[1];
+      }
+      
+      // 4. window.videoId
+      if (!videoId) {
+        const idMatch4 = html.match(/window\.videoId\s*=\s*["']([^"']+)["']/i);
+        if (idMatch4) videoId = idMatch4[1];
+      }
+      
+      console.log(`${PROVIDER_TAG2} Video ID: ${videoId || 'BULUNAMADI'}`);
+      
+      // ★★★ EĞER VIDEO ID VARSA API'DEN ÇEK ★★★
+      if (videoId) {
+        const apiUrls = [
+          `${siteUrl}/api/video/${videoId}`,
+          `${siteUrl}/api/source/${videoId}`,
+          `${siteUrl}/source2.php?v=${videoId}`
+        ];
+        
+        for (const apiUrl of apiUrls) {
+          try {
+            console.log(`${PROVIDER_TAG2} API deneniyor: ${apiUrl}`);
+            const apiRes = yield fetch(apiUrl, {
+              headers: {
+                "Referer": siteUrl,
+                "X-Requested-With": "XMLHttpRequest",
+                "Accept": "application/json"
+              }
+            });
+            
+            if (apiRes.ok) {
+              const data = yield apiRes.json();
+              let fileUrl = data.file || data.url || data.link || data.source;
+              
+              if (fileUrl) {
+                console.log(`${PROVIDER_TAG2} ✅ API'den link bulundu: ${fileUrl}`);
+                return {
+                  url: fileUrl,
+                  quality: data.quality || "Auto",
+                  headers: { "Referer": siteUrl }
+                };
+              }
+            }
+          } catch (e) {
+            console.log(`${PROVIDER_TAG2} API denemesi başarısız: ${e.message}`);
+          }
+        }
+      }
+      
+      // ★★★ ŞİFRELİ VERİ ★★★
       let iframeUrl = "";
       const encMatch = html.match(/<div[^>]*data-rm-k=["']true["'][^>]*>([\s\S]*?)<\/div>/i);
       if (encMatch && encMatch[1]) {
         console.log(`${PROVIDER_TAG2} Şifreli veri bulundu, çözülüyor...`);
-        const unescapeHtml = (str) => {
-          return str.replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#39;/g, "'");
-        };
-        const cleanStr = unescapeHtml(encMatch[1]);
+        const cleanStr = encMatch[1].replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#39;/g, "'");
         const decryptedUrl = decryptDizipalData(cleanStr);
         if (decryptedUrl) {
           iframeUrl = decryptedUrl;
           console.log(`${PROVIDER_TAG2} Çözülen Iframe: ${iframeUrl}`);
-        } else {
-          console.log(`${PROVIDER_TAG2} Şifre çözme işlemi başarısız oldu.`);
         }
       }
+      
+      // ★★★ IFRAME ★★★
       if (!iframeUrl) {
-        console.log(`${PROVIDER_TAG2} Fallback iframe aranıyor...`);
         const iframeMatch = html.match(/<iframe[^>]+src=["']([^"']+)["']/i);
         if (iframeMatch && iframeMatch[1]) {
           iframeUrl = iframeMatch[1];
-          console.log(`${PROVIDER_TAG2} Fallback Iframe bulundu: ${iframeUrl}`);
+          console.log(`${PROVIDER_TAG2} Iframe bulundu: ${iframeUrl}`);
         }
       }
-      if (!iframeUrl) {
-        console.error(`${PROVIDER_TAG2} Hiç iframe bulunamadı.`);
-        return null;
-      }
-      if (iframeUrl.startsWith("//")) {
-        iframeUrl = `https:${iframeUrl}`;
-      }
-      console.log(`${PROVIDER_TAG2} Player URL taranıyor: ${iframeUrl}`);
-      let domain = "https://dplayer82.site";
-      try {
-        domain = new URL(iframeUrl).origin;
-      } catch (e) {
-      }
-      const vParamMatch = iframeUrl.match(/[?&]v=([a-f0-9A-F]+)/);
-      let playlistId = vParamMatch ? vParamMatch[1] : null;
-      const directRe = /(https?:\/\/[^\s"'<>]+\.(?:m3u8|mp4)[^\s"'<>]*)/i;
-      let directMatch = null;
-      if (playlistId) {
-        console.log(`${PROVIDER_TAG2} URL'den ID alındı: ${playlistId}`);
-      } else {
-        try {
-          const playerRes = yield fetchWithResponse(iframeUrl, {
-            headers: { "Referer": url, "Origin": domain }
-          });
-          const playerHtml = yield playerRes.text();
-          const openPlayerMatch = playerHtml.match(/window\.openPlayer\s*\(\s*['"]([^'"]+)['"]/);
-          if (openPlayerMatch && openPlayerMatch[1]) {
-            playlistId = openPlayerMatch[1];
-            console.log(`${PROVIDER_TAG2} openPlayer ID: ${playlistId}`);
-          } else {
-            directMatch = playerHtml.match(directRe);
-            if (directMatch && directMatch[1]) {
-              console.log(`${PROVIDER_TAG2} Bulundu (Direct): ${directMatch[1]}`);
-              return {
-                url: directMatch[1],
-                quality: "Auto",
-                headers: { "Referer": iframeUrl }
-              };
-            }
-          }
-        } catch (e) {
-          console.log(`${PROVIDER_TAG2} Player sayfası çekilemedi (CF olabilir): ${e.message}`);
+      
+      if (iframeUrl) {
+        if (iframeUrl.startsWith("//")) {
+          iframeUrl = `https:${iframeUrl}`;
         }
+        return {
+          url: iframeUrl,
+          quality: "Auto",
+          headers: { "Referer": url }
+        };
       }
-      if (playlistId) {
-        const apiUrl = `${domain}/source2.php?v=${playlistId}`;
-        console.log(`${PROVIDER_TAG2} API sorgulanıyor: ${apiUrl}`);
-        try {
-          const apiRes = yield fetchWithResponse(apiUrl, {
-            headers: __spreadProps(__spreadValues({}, HEADERS), {
-              "Origin": domain,
-              "Referer": iframeUrl,
-              "X-Requested-With": "XMLHttpRequest",
-              "Accept": "application/json, text/javascript, */*; q=0.01",
-              "Sec-Fetch-Mode": "cors",
-              "Sec-Fetch-Site": "same-origin",
-              "Sec-GPC": "1"
-            })
-          });
-          const apiText = yield apiRes.text();
-          const fileMatch = apiText.match(/"file"\s*:\s*"([^"]+)"/);
-          if (fileMatch && fileMatch[1]) {
-            let fileUrl = fileMatch[1].replace(/\\\//g, "/");
-            if (fileUrl.startsWith("//")) {
-              fileUrl = `https:${fileUrl}`;
-            } else if (!fileUrl.startsWith("http")) {
-              fileUrl = `https://${fileUrl}`;
-            }
-            if (fileUrl.includes("m.php")) {
-              fileUrl = fileUrl.replace("m.php", "master.m3u8");
-            }
-            console.log(`${PROVIDER_TAG2} Bulundu (API): ${fileUrl}`);
-            return {
-              url: fileUrl,
-              quality: "Auto",
-              headers: { "Referer": iframeUrl }
-            };
-          }
-        } catch (e) {
-          console.error(`${PROVIDER_TAG2} API isteği başarısız: ${e.message}`);
-        }
-      }
-      console.log(`${PROVIDER_TAG2} Iframe URL WebView aracılığıyla çözülmesi için gönderiliyor...`);
-      return {
-        url: iframeUrl,
-        quality: "Auto",
-        headers: { "Referer": url }
-      };
+      
+      console.error(`${PROVIDER_TAG2} Hiç kaynak bulunamadı.`);
+      return null;
+      
     } catch (e) {
       console.error(`${PROVIDER_TAG2} resolveDizipal hatası: ${e.message}`);
       return null;
@@ -434,7 +423,7 @@ function decryptDizipalData(rawJsonStr) {
   }
 }
 
-// src/patronDizipal/index.js - ANA FONKSİYON (DÜZELTİLDİ)
+// src/patronDizipal/index.js - ANA FONKSİYON
 var PROVIDER_TAG3 = "[Dizipal]";
 
 function getStreams(tmdbId, type, season, episode, directUrl) {
@@ -444,7 +433,7 @@ function getStreams(tmdbId, type, season, episode, directUrl) {
       const activeUrl = yield resolveMainUrl();
       console.log(`${PROVIDER_TAG3} Aktif domain: ${activeUrl}`);
       
-      // ★★★ YENİ: EĞER DİREK URL VERİLDİYSE ★★★
+      // ★★★ DİREK URL ★★★
       if (directUrl) {
         console.log(`${PROVIDER_TAG3} Direk URL kullanılıyor: ${directUrl}`);
         const stream = yield resolveDizipal(directUrl, activeUrl);
@@ -459,7 +448,7 @@ function getStreams(tmdbId, type, season, episode, directUrl) {
         return [];
       }
       
-      // ★★★ NORMAL ARAMA (ESKİ KOD) ★★★
+      // ★★★ NORMAL ARAMA ★★★
       const { trTitle, origTitle, shortTitle, year } = yield getTmdbTitle(tmdbId, type);
       console.log(`${PROVIDER_TAG3} TR: ${trTitle} | Orig: ${origTitle} | Yıl: ${year}`);
       
