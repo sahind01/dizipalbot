@@ -1,0 +1,11 @@
+{
+  "success": false,
+  "tmdbId": "550",
+  "type": "movie",
+  "season": 1,
+  "episode": 1,
+  "link": null,
+  "quality": null,
+  "timestamp": "2026-06-21T13:54:24.798Z",
+  "error": "LINK_BULUNAMADI"
+}
