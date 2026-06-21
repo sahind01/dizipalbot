@@ -29,7 +29,7 @@ jobs:
       - name: Get Stream Link
         run: |
           node -e "
-          const patronDizipal = require('./patronDizipal.js');
+          const patronDizipal = require('./test.js');
           const fs = require('fs');
           
           (async () => {
