@@ -1,7 +1,7 @@
-// api/decrypt.js
-const axios = require('axios');
-const cheerio = require('cheerio');
-const crypto = require('crypto');
+// pages/api/decrypt.js
+import axios from 'axios';
+import * as cheerio from 'cheerio';
+import crypto from 'crypto';
 
 export default async function handler(req, res) {
     // CORS ayarları (Frontend'in bu API'ye erişebilmesi için)
