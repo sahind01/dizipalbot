@@ -30,11 +30,14 @@ export default async function handler(req, res) {
         });
 
         const $ = cheerio.load(data);
+        
+        // 2. Tüm olası video kaynaklarını bul
+        let videoUrl = '';
+        let videoSource = '';
+
+        // 2.1. Şifreli veriyi kontrol et (data-rm-k=true)
         const encryptedText = $('div[data-rm-k=true]').text();
-
-        let iframeUrl = '';
-
-        // 2. Şifreli veri varsa çöz (Kotlin kodunun Node.js karşılığı)
+        
         if (encryptedText) {
             const passphrase = "3hPn4uCjTVtfYWcjIcoJQ4cL1WWk1qxXI39egLYOmNv6IblA7eKJz68uU3eLzux1biZLCms0quEjTYniGv5z1JcKbNIsDQFSeIZOBZJz4is6pD7UyWDggWWzTLBQbHcQFpBQdClnuQaMNUHtLHTpzCvZy33p6I7wFBvL4fnXBYH84aUIyWGTRvM2G5cfoNf4705tO2kv";
             
@@ -47,26 +50,95 @@ export default async function handler(req, res) {
                 const iv = Buffer.from(ivMatch[1], 'hex');
                 const ciphertext = Buffer.from(ctMatch[1], 'base64');
 
-                // PBKDF2 ile key üretimi (Kotlin: 999 iteration, 256 bit = 32 bytes)
                 const key = crypto.pbkdf2Sync(passphrase, salt, 999, 32, 'sha512');
                 const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
                 
                 let decrypted = decipher.update(ciphertext, undefined, 'utf8');
                 decrypted += decipher.final('utf8');
                 
-                iframeUrl = decrypted.replace(/\\\//g, '/');
+                videoUrl = decrypted.replace(/\\\//g, '/');
+                videoSource = 'decrypted';
                 
-                if (iframeUrl.startsWith("//")) iframeUrl = "https:" + iframeUrl;
-                else if (!iframeUrl.startsWith("http")) iframeUrl = "https://" + iframeUrl;
+                if (videoUrl.startsWith("//")) videoUrl = "https:" + videoUrl;
+                else if (!videoUrl.startsWith("http")) videoUrl = "https://" + videoUrl;
             }
-        } else {
-            // Şifre yoksa direkt iframe'i al
-            iframeUrl = $('iframe').attr('src');
         }
 
-        return res.status(200).json({ success: true, iframeUrl });
+        // 2.2. Şifreli veri yoksa veya çözülemediyse, iframe ara
+        if (!videoUrl) {
+            const iframe = $('iframe');
+            if (iframe.length > 0) {
+                videoUrl = iframe.attr('src');
+                videoSource = 'iframe';
+            }
+        }
+
+        // 2.3. İframe yoksa, video etiketi ara
+        if (!videoUrl) {
+            const video = $('video source');
+            if (video.length > 0) {
+                videoUrl = video.attr('src');
+                videoSource = 'video';
+            }
+        }
+
+        // 2.4. Video etiketi yoksa, link ara (m3u8, mp4, playlist)
+        if (!videoUrl) {
+            const link = $('a[href*="m3u8"], a[href*="mp4"], a[href*="playlist"]');
+            if (link.length > 0) {
+                videoUrl = link.attr('href');
+                videoSource = 'link';
+            }
+        }
+
+        // 2.5. Hala bulunamadıysa, script içinden URL yakala
+        if (!videoUrl) {
+            const scripts = $('script').map((i, el) => $(el).html()).get();
+            for (const script of scripts) {
+                if (script && (script.includes('m3u8') || script.includes('video') || script.includes('player') || script.includes('source'))) {
+                    const matches = script.match(/(https?:\/\/[^\s"']+\.(m3u8|mp4|playlist|m3u)[^\s"']*)/gi);
+                    if (matches && matches.length > 0) {
+                        videoUrl = matches[0];
+                        videoSource = 'script';
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 2.6. Hala bulunamadıysa, data-src veya data-video ara
+        if (!videoUrl) {
+            const dataSrc = $('[data-src*="m3u8"], [data-src*="mp4"], [data-video]');
+            if (dataSrc.length > 0) {
+                videoUrl = dataSrc.attr('data-src') || dataSrc.attr('data-video');
+                videoSource = 'data-attribute';
+            }
+        }
+
+        // 3. Sonuçları döndür
+        if (videoUrl) {
+            // URL'yi temizle
+            videoUrl = videoUrl.replace(/\\/g, '');
+            if (videoUrl.startsWith('//')) videoUrl = 'https:' + videoUrl;
+            
+            return res.status(200).json({ 
+                success: true, 
+                videoUrl: videoUrl,
+                source: videoSource,
+                message: 'Video kaynağı bulundu'
+            });
+        } else {
+            return res.status(200).json({ 
+                success: false, 
+                videoUrl: null,
+                message: 'Video kaynağı bulunamadı. Sayfada video oynatıcı olmayabilir veya JavaScript ile yükleniyor olabilir.'
+            });
+        }
 
     } catch (error) {
-        return res.status(500).json({ error: error.message });
+        return res.status(500).json({ 
+            error: error.message,
+            success: false
+        });
     }
 }
