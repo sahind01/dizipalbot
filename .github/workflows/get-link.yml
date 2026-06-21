@@ -4,6 +4,10 @@ on:
   push:
   workflow_dispatch:
 
+# ★★★ BUNU EKLE ★★★
+permissions:
+  contents: write
+
 jobs:
   get-link:
     runs-on: ubuntu-latest
@@ -27,12 +31,10 @@ jobs:
           const fs = require('fs');
           
           (async () => {
-              // ★★★ BU DEĞERLERİ DEĞİŞTİR ★★★
-              const tmdbId = '550';      // Film ID
-              const type = 'movie';       // 'movie' veya 'tv'
-              const season = 1;           // Dizi ise sezon
-              const episode = 1;          // Dizi ise bölüm
-              // ★★★ DEĞİŞTİRME BURADA BİTTİ ★★★
+              const tmdbId = '550';
+              const type = 'movie';
+              const season = 1;
+              const episode = 1;
               
               let streams;
               let link = null;
@@ -83,9 +85,4 @@ jobs:
           git push
       
       - name: Show Link
-        run: |
-          echo "=========================================="
-          echo "📺 LİNK.JSON İÇERİĞİ:"
-          echo "=========================================="
-          cat link.json
-          echo "=========================================="
+        run: cat link.json
