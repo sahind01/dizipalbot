@@ -1,99 +1,60 @@
-name: Get Stream Link
+const patronDizipal = require('./patronDizipal.js');
 
-on:
-  push:
-  workflow_dispatch:
-
-permissions:
-  contents: write
-
-jobs:
-  get-link:
-    runs-on: ubuntu-latest
+(async () => {
+    const filmUrl = 'https://dizipal1556.com/movies/squatch';
     
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    console.log('📌 Film URL:', filmUrl);
     
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-      
-      - name: Install crypto-js
-        run: npm install crypto-js
-      
-      - name: Get Stream Link
-        run: |
-          node -e "
-          const patronDizipal = require('./test.js');
-          const fs = require('fs');
-          
-          (async () => {
-              // ★★★ BURAYA FİLM SAYFASI URL'İNİ YAZ ★★★
-              const directUrl = 'https://dizipal1556.com/movies/squatch';
-              
-              console.log('📌 URL:', directUrl);
-              
-              try {
-                  const streams = await patronDizipal.getStreams(
-                      'squatch',
-                      'movie',
-                      null,
-                      null,
-                      directUrl
-                  );
-                  
-                  let link = null;
-                  let quality = null;
-                  let error = null;
-                  
-                  if (streams && streams.length > 0) {
-                      link = streams[0].url;
-                      quality = streams[0].quality || 'Auto';
-                      console.log('✅ LINK:', link);
-                  } else {
-                      error = 'LINK_BULUNAMADI';
-                      console.log('❌ Link bulunamadı');
-                  }
-                  
-                  const result = {
-                      success: link !== null,
-                      url: directUrl,
-                      link: link,
-                      quality: quality,
-                      timestamp: new Date().toISOString(),
-                      error: error
-                  };
-                  
-                  fs.writeFileSync('link.json', JSON.stringify(result, null, 2));
-                  console.log('✅ link.json oluşturuldu');
-                  
-              } catch (e) {
-                  console.error('❌ HATA:', e.message);
-                  const result = {
-                      success: false,
-                      url: directUrl,
-                      link: null,
-                      timestamp: new Date().toISOString(),
-                      error: e.message
-                  };
-                  fs.writeFileSync('link.json', JSON.stringify(result, null, 2));
-              }
-          })();
-          "
-      
-      - name: Show Result
-        run: cat link.json
-      
-      - name: Commit JSON File
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "actions@github.com"
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
-          git add link.json
-          git commit -m "Link güncellendi [skip ci]" || echo "Değişiklik yok"
-          git push
+    // Sayfayı çek
+    const html = await fetch(filmUrl).then(r => r.text());
+    
+    // Player linkini bul (farklı pattern'ler)
+    const patterns = [
+        /window\.location\.href\s*=\s*["']([^"']+)["']/i,
+        /data-href=["']([^"']+)["']/i,
+        /href=["'](\/player\/[^"']+)["']/i,
+        /src=["'](\/player\/[^"']+)["']/i,
+        /data-player=["']([^"']+)["']/i,
+        /player\/([a-zA-Z0-9]+)/i
+    ];
+    
+    let playerUrl = null;
+    for (const pattern of patterns) {
+        const match = html.match(pattern);
+        if (match) {
+            playerUrl = match[1];
+            console.log(`✅ Player URL bulundu: ${playerUrl}`);
+            break;
+        }
+    }
+    
+    if (!playerUrl) {
+        console.log('❌ Player URL bulunamadı, tüm sayfayı kaydediyorum...');
+        require('fs').writeFileSync('sayfa.html', html);
+        console.log('📄 sayfa.html kaydedildi, manuel incele');
+        return;
+    }
+    
+    // Player URL'yi dene
+    const fullPlayerUrl = playerUrl.startsWith('http') ? playerUrl : `https://dizipal1556.com${playerUrl}`;
+    console.log(`🎮 Player URL: ${fullPlayerUrl}`);
+    
+    try {
+        const streams = await patronDizipal.getStreams(
+            'squatch',
+            'movie',
+            null,
+            null,
+            fullPlayerUrl
+        );
+        
+        if (streams && streams.length > 0) {
+            console.log('✅ LINK BULUNDU!');
+            console.log('📺 URL:', streams[0].url);
+        } else {
+            console.log('❌ Link bulunamadı');
+        }
+    } catch (e) {
+        console.error('❌ Hata:', e.message);
+    }
+})();
